@@ -97,6 +97,44 @@
         cursor: pointer;
         margin-top: 10px;
       }
+      .logs-container {
+        margin-top: 20px;
+        background-color: #272727;
+        color: #e0e0e0;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: monospace;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .log-entry {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 5px;
+      }
+      .collapsible {
+        background-color: #075e54;
+        color: white;
+        cursor: pointer;
+        padding: 18px;
+        width: 100%;
+        border: none;
+        text-align: left;
+        outline: none;
+        font-size: 16px;
+        border-radius: 8px 8px 0 0;
+        margin-top: 20px;
+      }
+      .active,
+      .collapsible:hover {
+        background-color: #128c7e;
+      }
+      .content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+        border-radius: 0 0 8px 8px;
+      }
     </style>
   </head>
   <body>
@@ -168,6 +206,16 @@
       <pre id="responseData"></pre>
     </div>
 
+    <button class="collapsible">Debug Logs (click to expand)</button>
+    <div class="content">
+      <div class="logs-container" id="logsContainer">
+        <div id="logs">Fetching logs...</div>
+      </div>
+      <button class="refresh-btn" id="refreshLogsBtn" style="width: 100%">
+        Refresh Logs
+      </button>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script>
       // Check connection status on page load
@@ -176,6 +224,27 @@
       // Also check for QR code on page load
       fetchQrCode();
 
+      // Initialize logs
+      fetchLogs();
+
+      // Setup collapsible elements
+      const collapsibles = document.getElementsByClassName("collapsible");
+      for (let i = 0; i < collapsibles.length; i++) {
+        collapsibles[i].addEventListener("click", function () {
+          this.classList.toggle("active");
+          const content = this.nextElementSibling;
+          if (content.style.maxHeight) {
+            content.style.maxHeight = null;
+          } else {
+            content.style.maxHeight = content.scrollHeight + "px";
+            // Fetch fresh logs when expanded
+            if (this.textContent.includes("Debug Logs")) {
+              fetchLogs();
+            }
+          }
+        });
+      }
+
       function checkWhatsAppStatus() {
         fetch("/status")
           .then((response) => response.json())
@@ -183,11 +252,13 @@
             const statusElement = document.getElementById("status");
             if (data.status === "Connected") {
               statusElement.classList.add("connected");
+              statusElement.classList.remove("disconnected");
               statusElement.textContent = "WhatsApp Client: Connected";
               // Hide QR container when connected
               document.getElementById("qrContainer").style.display = "none";
             } else {
               statusElement.classList.add("disconnected");
+              statusElement.classList.remove("connected");
               statusElement.textContent = "WhatsApp Client: Not Connected";
               // Show QR container when not connected
               document.getElementById("qrContainer").style.display = "block";
@@ -211,12 +282,37 @@
               document.getElementById("qrContainer").style.display = "block";
             } else {
               document.getElementById("qrCode").innerHTML =
-                "No QR code available. Either WhatsApp is already connected or still initializing.";
+                "No QR code available. Either WhatsApp is already connected or still initializing. Check logs below for details.";
             }
           })
           .catch((error) => {
             document.getElementById("qrCode").innerHTML =
-              "Error fetching QR code. Please try again.";
+              "Error fetching QR code. Please try again or check logs below.";
+            console.error("Error:", error);
+          });
+      }
+
+      // Function to fetch and display logs
+      function fetchLogs() {
+        fetch("/logs")
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success && data.logs && data.logs.length > 0) {
+              const logsHtml = data.logs
+                .map((log) => `<div class="log-entry">${log}</div>`)
+                .join("");
+              document.getElementById("logs").innerHTML = logsHtml;
+
+              // Auto-scroll to bottom
+              const logsContainer = document.getElementById("logsContainer");
+              logsContainer.scrollTop = logsContainer.scrollHeight;
+            } else {
+              document.getElementById("logs").innerHTML = "No logs available";
+            }
+          })
+          .catch((error) => {
+            document.getElementById("logs").innerHTML =
+              "Error fetching logs: " + error;
             console.error("Error:", error);
           });
       }
@@ -231,17 +327,34 @@
         document.getElementById("qrCode").innerHTML = qr.createImgTag(6);
       }
 
-      // Set up refresh button
+      // Set up refresh button for QR
       document
         .getElementById("refreshQrBtn")
         .addEventListener("click", function () {
           document.getElementById("qrCode").innerHTML = "Loading QR code...";
           fetchQrCode();
           checkWhatsAppStatus();
+          fetchLogs();
+        });
+
+      // Set up refresh button for logs
+      document
+        .getElementById("refreshLogsBtn")
+        .addEventListener("click", function () {
+          document.getElementById("logs").innerHTML = "Fetching logs...";
+          fetchLogs();
         });
 
       // Check status every 30 seconds
       setInterval(checkWhatsAppStatus, 30000);
+
+      // Check logs every 10 seconds if logs section is expanded
+      setInterval(() => {
+        const logsContent = document.querySelector(".collapsible + .content");
+        if (logsContent && logsContent.style.maxHeight) {
+          fetchLogs();
+        }
+      }, 10000);
 
       // Show/hide custom template field based on template selection
       document
@@ -299,6 +412,7 @@
 
               // After sending a message, check status again
               checkWhatsAppStatus();
+              fetchLogs();
             })
             .catch((error) => {
               console.error("Error:", error);

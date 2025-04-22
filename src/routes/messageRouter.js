@@ -130,4 +130,14 @@ router.get("/whatsapp-qr", (req, res) => {
   }
 });
 
+// New endpoint to get WhatsApp client logs
+router.get("/logs", (req, res) => {
+  const logs = whatsappClient.getLogs();
+  res.status(200).json({
+    success: true,
+    logs,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 module.exports = router;

@@ -5,15 +5,22 @@ const whatsappClient = require("./services/WhatsppClient");
 
 console.log("Starting WhatsApp Bot service...");
 
-// Initialize WhatsApp client
-whatsappClient
-  .initialize()
-  .then(() => {
-    console.log("WhatsApp client initialized successfully");
-  })
-  .catch((err) => {
-    console.error("Error initializing WhatsApp client:", err);
-  });
+// Initialize WhatsApp client with better error handling
+try {
+  console.log("Initializing WhatsApp client...");
+  whatsappClient
+    .initialize()
+    .then(() => {
+      console.log("WhatsApp client initialization sequence completed");
+    })
+    .catch((err) => {
+      console.error("Error during WhatsApp client initialization:", err);
+      // Continue running the server even if WhatsApp client fails
+    });
+} catch (error) {
+  console.error("Critical error initializing WhatsApp client:", error);
+  // Continue running the server even if WhatsApp client fails
+}
 
 const app = express();
 
@@ -21,9 +28,25 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// Add basic logging middleware
+// Add detailed logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  const startTime = Date.now();
+  console.log(
+    `${new Date().toISOString()} - ${req.method} ${
+      req.originalUrl
+    } - Request started`
+  );
+
+  // Add listener for when response finishes
+  res.on("finish", () => {
+    const duration = Date.now() - startTime;
+    console.log(
+      `${new Date().toISOString()} - ${req.method} ${
+        req.originalUrl
+      } - Response: ${res.statusCode} (${duration}ms)`
+    );
+  });
+
   next();
 });
 

@@ -1,17 +1,36 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 
-// Determine if we're in production (Render.com) or development
+// Determine if we're in production environment
 const isProduction = process.env.NODE_ENV === "production";
 
 // Store the most recent QR code
 let lastQrCode = null;
 
+// Store initialization logs
+let initLogs = [];
+
+// Log helper function
+const logMessage = (message) => {
+  const timestamp = new Date().toISOString();
+  const logEntry = `${timestamp} - ${message}`;
+  console.log(logEntry);
+
+  // Keep only the last 50 logs
+  initLogs.unshift(logEntry);
+  if (initLogs.length > 50) {
+    initLogs.pop();
+  }
+
+  return logEntry;
+};
+
 // Configure WhatsApp client with appropriate settings for environment
 const whatsappClient = new Client({
   authStrategy: new LocalAuth({ dataPath: "./auth_data" }),
   puppeteer: {
-    headless: isProduction ? true : false,
+    // Always use headless mode in both production and development
+    headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -22,13 +41,13 @@ const whatsappClient = new Client({
       "--single-process",
       "--disable-gpu",
     ],
-    timeout: 60000, // Increase timeout to 60 seconds
-    // If in production, we need to use Chromium from apt-get
-    executablePath: isProduction ? "/usr/bin/chromium-browser" : undefined,
+    timeout: 120000, // Increase timeout to 120 seconds
+    // Don't specify executablePath - let Puppeteer find the right one
+    // executablePath: isProduction ? "/usr/bin/chromium-browser" : undefined,
   },
 });
 
-// Log QR code to terminal and save to a file for remote access
+// Log QR code to terminal and save for web access
 whatsappClient.on("qr", (qr) => {
   // Store the QR code for web access
   lastQrCode = qr;
@@ -36,53 +55,57 @@ whatsappClient.on("qr", (qr) => {
   // Generate QR in terminal for local development
   qrcode.generate(qr, { small: true });
 
-  // For production environment, log QR code to use via logs
-  console.log("QR RECEIVED");
+  // Log QR received event
+  logMessage("WhatsApp QR code received and ready for scanning");
+});
 
-  // In production, you may want to store this somewhere accessible
-  if (isProduction) {
-    console.log("-----------------------------------------------");
-    console.log("SCAN THIS QR CODE WITH YOUR WHATSAPP MOBILE APP:");
-    console.log("-----------------------------------------------");
-    console.log(qr);
-    console.log("-----------------------------------------------");
-  }
+whatsappClient.on("loading_screen", (percent, message) => {
+  logMessage(`WhatsApp loading: ${percent}% - ${message}`);
 });
 
 whatsappClient.on("ready", () => {
-  console.log("WhatsApp client is ready");
+  logMessage("WhatsApp client is ready and fully connected");
   // Clear QR code when client is ready (authenticated)
   lastQrCode = null;
 });
 
 whatsappClient.on("authenticated", () => {
-  console.log("WhatsApp client authenticated");
+  logMessage("WhatsApp client authenticated successfully");
   // Clear QR code when authenticated
   lastQrCode = null;
 });
 
-whatsappClient.on("auth_failure", (msg) =>
-  console.error("WhatsApp authentication failure:", msg)
-);
+whatsappClient.on("auth_failure", (msg) => {
+  logMessage(`WhatsApp authentication failure: ${msg}`);
+});
 
-whatsappClient.on("disconnected", (reason) =>
-  console.log("WhatsApp client disconnected:", reason)
-);
+whatsappClient.on("disconnected", (reason) => {
+  logMessage(`WhatsApp client disconnected: ${reason}`);
+  // Set QR to null when disconnected
+  lastQrCode = null;
+});
 
 whatsappClient.on("message", async (msg) => {
   try {
     if (msg.from != "status@broadcast") {
       const contact = await msg.getContact();
-      console.log(contact, msg.body);
+      logMessage(
+        `Message from ${contact.pushname || contact.number}: ${msg.body}`
+      );
     }
   } catch (error) {
-    console.log(error);
+    logMessage(`Error processing message: ${error.message}`);
   }
 });
 
 // Add a method to get the current QR code
 whatsappClient.getQrCode = () => {
   return lastQrCode;
+};
+
+// Add a method to get initialization logs
+whatsappClient.getLogs = () => {
+  return initLogs;
 };
 
 module.exports = whatsappClient;
