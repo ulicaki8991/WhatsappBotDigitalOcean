@@ -118,26 +118,123 @@ router.get("/status", (req, res) => {
 
 // New endpoint to get WhatsApp QR code
 router.get("/whatsapp-qr", (req, res) => {
-  const qrCode = whatsappClient.getQrCode();
-  if (qrCode) {
-    res.status(200).json({ success: true, qrCode });
-  } else {
-    res.status(200).json({
+  try {
+    // Check if the function exists
+    if (typeof whatsappClient.getQrCode !== "function") {
+      return res.status(200).json({
+        success: false,
+        message: "QR code functionality not available",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const qrCode = whatsappClient.getQrCode();
+
+    if (qrCode) {
+      return res.status(200).json({
+        success: true,
+        qrCode,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      return res.status(200).json({
+        success: false,
+        message:
+          "QR code not available. Either WhatsApp is already connected or still initializing.",
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error("Error getting QR code:", error);
+    return res.status(500).json({
       success: false,
-      message:
-        "QR code not available. Either WhatsApp is already connected or still initializing.",
+      message: "Failed to retrieve QR code: " + error.message,
+      timestamp: new Date().toISOString(),
     });
   }
 });
 
 // New endpoint to get WhatsApp client logs
 router.get("/logs", (req, res) => {
-  const logs = whatsappClient.getLogs();
+  try {
+    // Check if the logs function exists
+    if (typeof whatsappClient.getLogs !== "function") {
+      return res.status(200).json({
+        success: false,
+        message: "Logs functionality not available",
+        logs: [],
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const logs = whatsappClient.getLogs() || [];
+
+    // Ensure logs is an array
+    const safeLogsArray = Array.isArray(logs) ? logs : [];
+
+    return res.status(200).json({
+      success: true,
+      logs: safeLogsArray,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error getting logs:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve logs: " + error.message,
+      logs: [],
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Simple test endpoint to verify JSON responses are working
+router.get("/test-json", (req, res) => {
   res.status(200).json({
     success: true,
-    logs,
+    message: "JSON endpoint is working correctly",
     timestamp: new Date().toISOString(),
   });
+});
+
+// Endpoint to reinitialize the WhatsApp client
+router.post("/reinitialize-whatsapp", (req, res) => {
+  try {
+    if (typeof whatsappClient.initialize !== "function") {
+      return res.status(400).json({
+        success: false,
+        message: "WhatsApp client does not have an initialize method",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Attempt to initialize
+    whatsappClient
+      .initialize()
+      .then(() => {
+        console.log("WhatsApp client manually reinitialized");
+      })
+      .catch((err) => {
+        console.error(
+          "Error during manual WhatsApp client initialization:",
+          err
+        );
+      });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "WhatsApp client reinitialization has been triggered. Check logs for progress.",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error triggering reinitialization:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to reinitialize WhatsApp client: " + error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 module.exports = router;

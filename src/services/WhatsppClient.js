@@ -7,56 +7,79 @@ const isProduction = process.env.NODE_ENV === "production";
 // Store the most recent QR code
 let lastQrCode = null;
 
-// Store initialization logs
-let initLogs = [];
+// Store initialization logs - initialize with startup message
+let initLogs = [`${new Date().toISOString()} - WhatsApp service starting up`];
 
 // Log helper function
 const logMessage = (message) => {
-  const timestamp = new Date().toISOString();
-  const logEntry = `${timestamp} - ${message}`;
-  console.log(logEntry);
+  try {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${message}`;
+    console.log(logEntry);
 
-  // Keep only the last 50 logs
-  initLogs.unshift(logEntry);
-  if (initLogs.length > 50) {
-    initLogs.pop();
+    // Keep only the last 50 logs
+    if (!Array.isArray(initLogs)) {
+      initLogs = []; // Reset if somehow corrupted
+    }
+
+    initLogs.unshift(logEntry);
+    if (initLogs.length > 50) {
+      initLogs.pop();
+    }
+
+    return logEntry;
+  } catch (error) {
+    console.error("Error in logMessage:", error);
+    return `${new Date().toISOString()} - Error logging message`;
   }
-
-  return logEntry;
 };
 
-// Configure WhatsApp client with appropriate settings for environment
+// Log initialization
+logMessage("Configuring WhatsApp client");
+
+// Set puppeteer options based on environment
+const puppeteerOptions = {
+  headless: true,
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-accelerated-2d-canvas",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process",
+    "--disable-gpu",
+  ],
+  timeout: 120000, // 2 minutes timeout
+};
+
+// Log additional platform info
+logMessage(`Platform: ${process.platform}, Node version: ${process.version}`);
+
+// Create WhatsApp client with appropriate configuration
 const whatsappClient = new Client({
   authStrategy: new LocalAuth({ dataPath: "./auth_data" }),
-  puppeteer: {
-    // Always use headless mode in both production and development
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process",
-      "--disable-gpu",
-    ],
-    timeout: 120000, // Increase timeout to 120 seconds
-    // Don't specify executablePath - let Puppeteer find the right one
-    // executablePath: isProduction ? "/usr/bin/chromium-browser" : undefined,
-  },
+  puppeteer: puppeteerOptions,
 });
 
 // Log QR code to terminal and save for web access
 whatsappClient.on("qr", (qr) => {
-  // Store the QR code for web access
-  lastQrCode = qr;
+  try {
+    // Store the QR code for web access
+    lastQrCode = qr;
 
-  // Generate QR in terminal for local development
-  qrcode.generate(qr, { small: true });
+    // Generate QR in terminal for local development
+    try {
+      qrcode.generate(qr, { small: true });
+    } catch (qrError) {
+      logMessage(`Error generating QR in terminal: ${qrError.message}`);
+    }
 
-  // Log QR received event
-  logMessage("WhatsApp QR code received and ready for scanning");
+    // Log QR received event
+    logMessage("WhatsApp QR code received and ready for scanning");
+  } catch (error) {
+    logMessage(`Error in QR handler: ${error.message}`);
+  }
 });
 
 whatsappClient.on("loading_screen", (percent, message) => {
@@ -100,12 +123,25 @@ whatsappClient.on("message", async (msg) => {
 
 // Add a method to get the current QR code
 whatsappClient.getQrCode = () => {
-  return lastQrCode;
+  try {
+    return lastQrCode;
+  } catch (error) {
+    logMessage(`Error in getQrCode: ${error.message}`);
+    return null;
+  }
 };
 
 // Add a method to get initialization logs
 whatsappClient.getLogs = () => {
-  return initLogs;
+  try {
+    return Array.isArray(initLogs) ? initLogs : [];
+  } catch (error) {
+    console.error("Error in getLogs:", error);
+    return [
+      `${new Date().toISOString()} - Error retrieving logs: ${error.message}`,
+    ];
+  }
 };
 
+// Export the client
 module.exports = whatsappClient;

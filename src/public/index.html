@@ -140,7 +140,39 @@
   <body>
     <h1>WhatsApp Price Notification Sender</h1>
 
-    <div class="status" id="status">Checking connection status...</div>
+    <div
+      style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 20px;
+      "
+    >
+      <div class="status" id="status" style="flex-grow: 1; margin-bottom: 0">
+        Checking connection status...
+      </div>
+      <button
+        class="refresh-btn"
+        id="reinitializeBtn"
+        style="background-color: #e74c3c"
+      >
+        Reinitialize WhatsApp
+      </button>
+    </div>
+
+    <div
+      id="serverStatus"
+      class="status"
+      style="
+        margin-bottom: 20px;
+        display: none;
+        background-color: #f0f8ff;
+        color: #0c5460;
+      "
+    >
+      Server status: Checking...
+    </div>
 
     <div class="qr-container" id="qrContainer">
       <h2>Scan QR Code to Connect WhatsApp</h2>
@@ -211,21 +243,94 @@
       <div class="logs-container" id="logsContainer">
         <div id="logs">Fetching logs...</div>
       </div>
-      <button class="refresh-btn" id="refreshLogsBtn" style="width: 100%">
-        Refresh Logs
-      </button>
+      <div style="display: flex; gap: 10px; margin-top: 10px">
+        <button class="refresh-btn" id="refreshLogsBtn" style="flex-grow: 1">
+          Refresh Logs
+        </button>
+        <button
+          class="refresh-btn"
+          id="testJsonBtn"
+          style="flex-grow: 1; background-color: #3498db"
+        >
+          Test JSON Connection
+        </button>
+      </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script>
-      // Check connection status on page load
-      checkWhatsAppStatus();
+      // Global API path prefix - will be dynamically determined
+      let apiPrefix = "";
 
-      // Also check for QR code on page load
-      fetchQrCode();
+      // Check server configuration on load
+      checkServerConfiguration();
 
-      // Initialize logs
-      fetchLogs();
+      // Function to check server configuration and set proper API paths
+      function checkServerConfiguration() {
+        const serverStatusEl = document.getElementById("serverStatus");
+        serverStatusEl.style.display = "block";
+        serverStatusEl.textContent = "Checking server configuration...";
+
+        // First try the /api path
+        fetch("/api/test-json")
+          .then((response) => {
+            if (response.ok) {
+              apiPrefix = "/api";
+              serverStatusEl.textContent = "Server configured with /api prefix";
+              serverStatusEl.style.backgroundColor = "#d4edda";
+              serverStatusEl.style.color = "#155724";
+              console.log("Using API prefix: /api");
+            } else {
+              throw new Error("API prefix test failed");
+            }
+          })
+          .catch((error) => {
+            console.log("Testing direct API path without prefix");
+            // Try direct path without prefix
+            fetch("/test-json")
+              .then((response) => {
+                if (response.ok) {
+                  apiPrefix = "";
+                  serverStatusEl.textContent =
+                    "Server configured with direct API paths";
+                  serverStatusEl.style.backgroundColor = "#d4edda";
+                  serverStatusEl.style.color = "#155724";
+                  console.log("Using API prefix: '' (empty)");
+                } else {
+                  throw new Error("Direct path test failed");
+                }
+              })
+              .catch((error) => {
+                serverStatusEl.textContent =
+                  "Server API configuration issue. Check console for details.";
+                serverStatusEl.style.backgroundColor = "#f8d7da";
+                serverStatusEl.style.color = "#721c24";
+                console.error("Both API path configurations failed:", error);
+              })
+              .finally(() => {
+                // Continue with app initialization regardless of result
+                initializeApp();
+              });
+          })
+          .finally(() => {
+            if (apiPrefix) {
+              // If first test succeeded, initialize app
+              initializeApp();
+            }
+          });
+      }
+
+      // Initialize the app after determining API path
+      function initializeApp() {
+        // Check connection status
+        checkWhatsAppStatus();
+
+        // Also check for QR code
+        fetchQrCode();
+
+        // Initialize logs
+        fetchLogs();
+      }
 
       // Setup collapsible elements
       const collapsibles = document.getElementsByClassName("collapsible");
@@ -246,8 +351,34 @@
       }
 
       function checkWhatsAppStatus() {
-        fetch("/status")
-          .then((response) => response.json())
+        fetch(`${apiPrefix}/status`)
+          .then((response) => {
+            // Check if the response is ok
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Server responded with status ${
+                    response.status
+                  }: ${text.substring(0, 150)}...`
+                );
+              });
+            }
+
+            // Check if the response is JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Expected JSON but got ${contentType}: ${text.substring(
+                    0,
+                    150
+                  )}...`
+                );
+              });
+            }
+
+            return response.json();
+          })
           .then((data) => {
             const statusElement = document.getElementById("status");
             if (data.status === "Connected") {
@@ -266,36 +397,108 @@
             }
           })
           .catch((error) => {
-            document.getElementById("status").textContent =
-              "Error checking connection status";
-            console.error("Error:", error);
+            const statusElement = document.getElementById("status");
+            statusElement.classList.add("disconnected");
+            statusElement.classList.remove("connected");
+            statusElement.textContent = `Error checking connection status: ${error.message}`;
+            console.error("Status check error:", error);
+
+            // Try to fetch logs to see what's happening
+            fetchLogs();
           });
       }
 
       // Function to fetch and display QR code
       function fetchQrCode() {
-        fetch("/whatsapp-qr")
-          .then((response) => response.json())
+        document.getElementById("qrCode").innerHTML = "Loading QR code...";
+
+        fetch(`${apiPrefix}/whatsapp-qr`)
+          .then((response) => {
+            // Check if the response is ok
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Server responded with status ${
+                    response.status
+                  }: ${text.substring(0, 150)}...`
+                );
+              });
+            }
+
+            // Check if the response is JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Expected JSON but got ${contentType}: ${text.substring(
+                    0,
+                    150
+                  )}...`
+                );
+              });
+            }
+
+            return response.json();
+          })
           .then((data) => {
             if (data.success && data.qrCode) {
               displayQrCode(data.qrCode);
               document.getElementById("qrContainer").style.display = "block";
             } else {
-              document.getElementById("qrCode").innerHTML =
-                "No QR code available. Either WhatsApp is already connected or still initializing. Check logs below for details.";
+              document.getElementById(
+                "qrCode"
+              ).innerHTML = `<div style="padding: 20px; background-color: #f8f9fa; border-radius: 4px;">
+                  ${
+                    data.message ||
+                    "No QR code available. Either WhatsApp is already connected or still initializing."
+                  } 
+                  <br><br>Check logs below for details.
+                </div>`;
             }
           })
           .catch((error) => {
-            document.getElementById("qrCode").innerHTML =
-              "Error fetching QR code. Please try again or check logs below.";
-            console.error("Error:", error);
+            document.getElementById(
+              "qrCode"
+            ).innerHTML = `<div style="color: #ff6b6b; padding: 20px; background-color: #f8f9fa; border-radius: 4px;">
+                Error fetching QR code: ${error.message}
+                <br><br>Please try again or check logs below.
+              </div>`;
+            console.error("QR code fetch error:", error);
           });
       }
 
       // Function to fetch and display logs
       function fetchLogs() {
-        fetch("/logs")
-          .then((response) => response.json())
+        document.getElementById("logs").innerHTML = "Fetching logs...";
+
+        fetch(`${apiPrefix}/logs`)
+          .then((response) => {
+            // Check if the response is ok and log the content type
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Server responded with status ${
+                    response.status
+                  }: ${text.substring(0, 150)}...`
+                );
+              });
+            }
+
+            // Check if the response is JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Expected JSON but got ${contentType}: ${text.substring(
+                    0,
+                    150
+                  )}...`
+                );
+              });
+            }
+
+            return response.json();
+          })
           .then((data) => {
             if (data.success && data.logs && data.logs.length > 0) {
               const logsHtml = data.logs
@@ -307,13 +510,15 @@
               const logsContainer = document.getElementById("logsContainer");
               logsContainer.scrollTop = logsContainer.scrollHeight;
             } else {
-              document.getElementById("logs").innerHTML = "No logs available";
+              document.getElementById("logs").innerHTML =
+                "No logs available. The server returned a valid response but no log entries were found.";
             }
           })
           .catch((error) => {
-            document.getElementById("logs").innerHTML =
-              "Error fetching logs: " + error;
-            console.error("Error:", error);
+            document.getElementById(
+              "logs"
+            ).innerHTML = `<div style="color: #ff6b6b;">Error fetching logs: ${error.message}</div>`;
+            console.error("Logs fetch error:", error);
           });
       }
 
@@ -344,6 +549,78 @@
           document.getElementById("logs").innerHTML = "Fetching logs...";
           fetchLogs();
         });
+
+      // Set up test JSON button
+      document
+        .getElementById("testJsonBtn")
+        .addEventListener("click", function () {
+          testJsonConnection();
+        });
+
+      // Function to test basic JSON connectivity
+      function testJsonConnection() {
+        document.getElementById("logs").innerHTML =
+          "Testing JSON connection...";
+
+        fetch(`${apiPrefix}/test-json`)
+          .then((response) => {
+            // Check if the response is ok
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Server responded with status ${
+                    response.status
+                  }: ${text.substring(0, 150)}...`
+                );
+              });
+            }
+
+            // Check if the response is JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Expected JSON but got ${contentType}: ${text.substring(
+                    0,
+                    150
+                  )}...`
+                );
+              });
+            }
+
+            return response.json();
+          })
+          .then((data) => {
+            document.getElementById(
+              "logs"
+            ).innerHTML = `<div style="color: #2ecc71; font-weight: bold;">
+                ✓ JSON connection successful!
+                <br><br>
+                Response: ${JSON.stringify(data, null, 2)}
+                <br><br>
+                This means your server is correctly responding with JSON. If other endpoints
+                are failing, the issue is likely specific to those endpoints.
+              </div>`;
+          })
+          .catch((error) => {
+            document.getElementById(
+              "logs"
+            ).innerHTML = `<div style="color: #e74c3c; font-weight: bold;">
+                ✗ JSON connection failed: ${error.message}
+                <br><br>
+                This indicates a problem with your server's ability to serve JSON responses.
+                The issue might be related to:
+                <ul>
+                  <li>Network connectivity</li>
+                  <li>Server configuration issues</li>
+                  <li>Proxy or firewall settings</li>
+                  <li>CORS policy issues</li>
+                  <li>Using path: ${apiPrefix}/test-json</li>
+                </ul>
+              </div>`;
+            console.error("JSON test error:", error);
+          });
+      }
 
       // Check status every 30 seconds
       setInterval(checkWhatsAppStatus, 30000);
@@ -394,7 +671,7 @@
             data.customTemplate = customTemplate;
           }
 
-          fetch("/send-price-notification", {
+          fetch(`${apiPrefix}/send-price-notification`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -424,6 +701,61 @@
               responseData.textContent = "Error sending message: " + error;
             });
         });
+
+      // Set up reinitialize button
+      document
+        .getElementById("reinitializeBtn")
+        .addEventListener("click", function () {
+          reinitializeWhatsApp();
+        });
+
+      // Function to reinitialize WhatsApp client
+      function reinitializeWhatsApp() {
+        const statusElement = document.getElementById("status");
+        statusElement.textContent = "Triggering WhatsApp reinitialization...";
+
+        fetch(`${apiPrefix}/reinitialize-whatsapp`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(
+                  `Server responded with status ${
+                    response.status
+                  }: ${text.substring(0, 150)}...`
+                );
+              });
+            }
+            return response.json();
+          })
+          .then((data) => {
+            statusElement.textContent =
+              "Reinitialization triggered. Check logs for progress.";
+            // Expand logs to show progress
+            const collapsible = document.querySelector(".collapsible");
+            if (collapsible && !collapsible.classList.contains("active")) {
+              collapsible.click();
+            }
+            // Fetch logs to show progress
+            fetchLogs();
+            // After a delay, check status again
+            setTimeout(() => {
+              checkWhatsAppStatus();
+              fetchQrCode();
+              fetchLogs();
+            }, 5000);
+          })
+          .catch((error) => {
+            statusElement.textContent = `Reinitialization failed: ${error.message}`;
+            console.error("Reinitialization error:", error);
+            // Fetch logs anyway to debug
+            fetchLogs();
+          });
+      }
     </script>
   </body>
 </html>
