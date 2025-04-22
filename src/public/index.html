@@ -75,12 +75,40 @@
         background-color: #f7c8c8;
         color: #5d0a0a;
       }
+      .qr-container {
+        margin: 20px auto;
+        text-align: center;
+        display: none;
+      }
+      .qr-code {
+        margin: 20px auto;
+        padding: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        display: inline-block;
+      }
+      .refresh-btn {
+        background-color: #128c7e;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
     </style>
   </head>
   <body>
     <h1>WhatsApp Price Notification Sender</h1>
 
     <div class="status" id="status">Checking connection status...</div>
+
+    <div class="qr-container" id="qrContainer">
+      <h2>Scan QR Code to Connect WhatsApp</h2>
+      <div class="qr-code" id="qrCode">Loading QR code...</div>
+      <button class="refresh-btn" id="refreshQrBtn">Refresh QR Code</button>
+    </div>
 
     <div class="form-container">
       <form id="priceForm">
@@ -140,25 +168,80 @@
       <pre id="responseData"></pre>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script>
       // Check connection status on page load
-      fetch("/status")
-        .then((response) => response.json())
-        .then((data) => {
-          const statusElement = document.getElementById("status");
-          if (data.status === "Connected") {
-            statusElement.classList.add("connected");
-            statusElement.textContent = "WhatsApp Client: Connected";
-          } else {
-            statusElement.classList.add("disconnected");
-            statusElement.textContent = "WhatsApp Client: Not Connected";
-          }
-        })
-        .catch((error) => {
-          document.getElementById("status").textContent =
-            "Error checking connection status";
-          console.error("Error:", error);
+      checkWhatsAppStatus();
+
+      // Also check for QR code on page load
+      fetchQrCode();
+
+      function checkWhatsAppStatus() {
+        fetch("/status")
+          .then((response) => response.json())
+          .then((data) => {
+            const statusElement = document.getElementById("status");
+            if (data.status === "Connected") {
+              statusElement.classList.add("connected");
+              statusElement.textContent = "WhatsApp Client: Connected";
+              // Hide QR container when connected
+              document.getElementById("qrContainer").style.display = "none";
+            } else {
+              statusElement.classList.add("disconnected");
+              statusElement.textContent = "WhatsApp Client: Not Connected";
+              // Show QR container when not connected
+              document.getElementById("qrContainer").style.display = "block";
+              fetchQrCode();
+            }
+          })
+          .catch((error) => {
+            document.getElementById("status").textContent =
+              "Error checking connection status";
+            console.error("Error:", error);
+          });
+      }
+
+      // Function to fetch and display QR code
+      function fetchQrCode() {
+        fetch("/whatsapp-qr")
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success && data.qrCode) {
+              displayQrCode(data.qrCode);
+              document.getElementById("qrContainer").style.display = "block";
+            } else {
+              document.getElementById("qrCode").innerHTML =
+                "No QR code available. Either WhatsApp is already connected or still initializing.";
+            }
+          })
+          .catch((error) => {
+            document.getElementById("qrCode").innerHTML =
+              "Error fetching QR code. Please try again.";
+            console.error("Error:", error);
+          });
+      }
+
+      // Function to display the QR code
+      function displayQrCode(qrData) {
+        const typeNumber = 0;
+        const errorCorrectionLevel = "L";
+        const qr = qrcode(typeNumber, errorCorrectionLevel);
+        qr.addData(qrData);
+        qr.make();
+        document.getElementById("qrCode").innerHTML = qr.createImgTag(6);
+      }
+
+      // Set up refresh button
+      document
+        .getElementById("refreshQrBtn")
+        .addEventListener("click", function () {
+          document.getElementById("qrCode").innerHTML = "Loading QR code...";
+          fetchQrCode();
+          checkWhatsAppStatus();
         });
+
+      // Check status every 30 seconds
+      setInterval(checkWhatsAppStatus, 30000);
 
       // Show/hide custom template field based on template selection
       document
@@ -213,6 +296,9 @@
 
               responseContainer.style.display = "block";
               responseData.textContent = JSON.stringify(data, null, 2);
+
+              // After sending a message, check status again
+              checkWhatsAppStatus();
             })
             .catch((error) => {
               console.error("Error:", error);

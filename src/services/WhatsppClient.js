@@ -4,6 +4,9 @@ const qrcode = require("qrcode-terminal");
 // Determine if we're in production (Render.com) or development
 const isProduction = process.env.NODE_ENV === "production";
 
+// Store the most recent QR code
+let lastQrCode = null;
+
 // Configure WhatsApp client with appropriate settings for environment
 const whatsappClient = new Client({
   authStrategy: new LocalAuth({ dataPath: "./auth_data" }),
@@ -27,11 +30,14 @@ const whatsappClient = new Client({
 
 // Log QR code to terminal and save to a file for remote access
 whatsappClient.on("qr", (qr) => {
+  // Store the QR code for web access
+  lastQrCode = qr;
+
   // Generate QR in terminal for local development
   qrcode.generate(qr, { small: true });
 
   // For production environment, log QR code to use via logs
-  console.log("QR RECEIVED", qr);
+  console.log("QR RECEIVED");
 
   // In production, you may want to store this somewhere accessible
   if (isProduction) {
@@ -43,11 +49,17 @@ whatsappClient.on("qr", (qr) => {
   }
 });
 
-whatsappClient.on("ready", () => console.log("WhatsApp client is ready"));
+whatsappClient.on("ready", () => {
+  console.log("WhatsApp client is ready");
+  // Clear QR code when client is ready (authenticated)
+  lastQrCode = null;
+});
 
-whatsappClient.on("authenticated", () =>
-  console.log("WhatsApp client authenticated")
-);
+whatsappClient.on("authenticated", () => {
+  console.log("WhatsApp client authenticated");
+  // Clear QR code when authenticated
+  lastQrCode = null;
+});
 
 whatsappClient.on("auth_failure", (msg) =>
   console.error("WhatsApp authentication failure:", msg)
@@ -67,5 +79,10 @@ whatsappClient.on("message", async (msg) => {
     console.log(error);
   }
 });
+
+// Add a method to get the current QR code
+whatsappClient.getQrCode = () => {
+  return lastQrCode;
+};
 
 module.exports = whatsappClient;

@@ -1,2 +1,3 @@
-2025/04/22-15:48:00.126 17603 Creating DB /Users/maximoulitzky/Documents/Dev/Matara/WhatsappConnector/WhatsappBot/auth_data/session/Default/shared_proto_db/metadata since it was missing.
-2025/04/22-15:48:00.142 17603 Reusing MANIFEST /Users/maximoulitzky/Documents/Dev/Matara/WhatsappConnector/WhatsappBot/auth_data/session/Default/shared_proto_db/metadata/MANIFEST-000001
+2025/04/22-16:03:36.795 1e503 Reusing MANIFEST /Users/maximoulitzky/Documents/Dev/Matara/WhatsappConnector/WhatsappBotDigitalOcean/auth_data/session/Default/shared_proto_db/metadata/MANIFEST-000001
+2025/04/22-16:03:36.795 1e503 Recovering log #3
+2025/04/22-16:03:36.797 1e503 Reusing old log /Users/maximoulitzky/Documents/Dev/Matara/WhatsappConnector/WhatsappBotDigitalOcean/auth_data/session/Default/shared_proto_db/metadata/000003.log 

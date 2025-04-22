@@ -41,9 +41,12 @@ app.get("/", (req, res) => {
 // Health check endpoint for Render
 app.get("/health", (req, res) => {
   const clientStatus = whatsappClient.info ? "Connected" : "Initializing";
+  const qrAvailable = whatsappClient.getQrCode() ? true : false;
+
   res.status(200).json({
     status: "OK",
     whatsapp: clientStatus,
+    qrAvailable: qrAvailable,
     timestamp: new Date().toISOString(),
   });
 });

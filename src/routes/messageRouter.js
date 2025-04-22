@@ -104,8 +104,30 @@ router.post("/send-price-notification", async (req, res) => {
 
 // Get connection status
 router.get("/status", (req, res) => {
-  const status = whatsappClient.info ? "Connected" : "Not connected";
-  res.status(200).json({ status });
+  const isConnected = !!whatsappClient.info;
+  const status = isConnected ? "Connected" : "Not connected";
+  const qrAvailable = whatsappClient.getQrCode() ? true : false;
+
+  res.status(200).json({
+    status,
+    isConnected,
+    qrAvailable,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// New endpoint to get WhatsApp QR code
+router.get("/whatsapp-qr", (req, res) => {
+  const qrCode = whatsappClient.getQrCode();
+  if (qrCode) {
+    res.status(200).json({ success: true, qrCode });
+  } else {
+    res.status(200).json({
+      success: false,
+      message:
+        "QR code not available. Either WhatsApp is already connected or still initializing.",
+    });
+  }
 });
 
 module.exports = router;
