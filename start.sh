@@ -1,36 +1,45 @@
 #!/bin/bash
 
-# Log start time
-echo "Starting application at $(date)"
-
-# Print basic information
+echo "========== WhatsApp Connector Startup =========="
+echo "Starting at: $(date)"
 echo "Node version: $(node -v)"
 echo "NPM version: $(npm -v)"
-echo "Current directory: $(pwd)"
 
-# Check if src directory exists
-if [ ! -d "src" ]; then
-    echo "WARNING: src directory not found!"
-    echo "Current directory contents:"
-    ls -la
-    echo "Please ensure you're in the correct directory"
+# Check current directory
+echo "Current directory: $(pwd)"
+echo "Files in current directory:"
+ls -la
+
+# Verify important files exist
+echo -n "Checking for index.js: "
+if [ -f "src/index.js" ]; then
+    echo "FOUND"
+else
+    echo "NOT FOUND - Critical Error"
+    echo "Current directory structure:"
+    find . -type f -name "*.js" | sort
     exit 1
 fi
 
-# Install dependencies if needed
-if [ ! -d "node_modules" ] || [ "$1" == "--reinstall" ]; then
-    echo "Installing dependencies..."
+echo -n "Checking for messageRouter.js: "
+if [ -f "src/routes/messageRouter.js" ]; then
+    echo "FOUND"
+else
+    echo "NOT FOUND - Critical Error"
+    exit 1
+fi
+
+# Reinstall dependencies if requested
+if [ "$1" == "--reinstall" ]; then
+    echo "Reinstalling dependencies..."
+    rm -rf node_modules
+    npm install
+elif [ ! -d "node_modules" ]; then
+    echo "Installing dependencies (node_modules not found)..."
     npm install
 fi
 
 # Start the application
-echo "Starting application..."
-node src/index.js
-
-# If the application exits, log the error
-if [ $? -ne 0 ]; then
-    echo "Application failed to start!"
-    echo "Last 50 lines of log:"
-    tail -n 50 nohup.out
-    exit 1
-fi 
+echo "Starting server..."
+echo "Server should be available at http://$(hostname -I | awk '{print $1}'):3000"
+cd $(pwd) && node src/index.js 
